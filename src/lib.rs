@@ -18,57 +18,64 @@ impl ExchangeRate {
         let an: Result<String, ReqwestError> = get_request().await;
         let str_an: &str = &an.unwrap();
         let a = get_map_from_json(str_an, "cur_unit", cur_unit);
-        let b = &a.unwrap().unwrap();
+        let value = &a.unwrap().unwrap();
+        println!("{:?}", value);
         Ok(Self {
             cur_unit: cur_unit.to_string(),
-            buy_ex_rate: b["ttb"]
+            buy_ex_rate: value["ttb"]
                 .to_string()
                 .replace("\"", "")
                 .replace(",", "")
                 .parse::<f64>()
                 .unwrap(),
-            sell_ex_rate: b["tts"]
+            sell_ex_rate: value["tts"]
                 .to_string()
                 .replace("\"", "")
                 .replace(",", "")
                 .parse::<f64>()
                 .unwrap(),
-            cur_name: b["cur_nm"].to_string().replace("\"", ""),
+            cur_name: value["cur_nm"].to_string().replace("\"", ""),
         })
     }
-    pub async fn cal(cur_unit: &str, money: u32, case: &str) {
+    pub async fn cal(cur_unit: &str, money: u32, case: &str) -> Result<Self, String> {
         let an: Result<String, ReqwestError> = get_request().await;
         let str_an: &str = &an.unwrap();
         let a = get_map_from_json(str_an, "cur_unit", cur_unit);
-        let b = &a.unwrap().unwrap();
-        let cur_name = b["cur_nm"].to_string().replace("\"", "");
+        let value = &a.unwrap().unwrap();
+        let cur_name = value["cur_nm"].to_string().replace("\"", "");
+        let buy_ex_rate: f64 = value["ttb"]
+            .to_string()
+            .replace("\"", "")
+            .replace(",", "")
+            .parse::<f64>()
+            .unwrap();
+        let sell_ex_rate: f64 = value["tts"]
+            .to_string()
+            .replace("\"", "")
+            .replace(",", "")
+            .parse::<f64>()
+            .unwrap();
         if case == "buy" {
-            let buy_ex_rate: f32 = b["ttb"]
-                .to_string()
-                .replace("\"", "")
-                .replace(",", "")
-                .parse::<f32>()
-                .unwrap();
             println!(
                 "Exchange {} 원 to {} becomes {:?} {:?} ",
                 money,
                 cur_name,
-                (money as f32 / buy_ex_rate * 100.0).round() / 100.0,
+                (money as f64 / buy_ex_rate * 100.0).round() / 100.0,
                 cur_unit,
             );
         } else {
-            let sell_ex_rate: f32 = b["tts"]
-                .to_string()
-                .replace("\"", "")
-                .replace(",", "")
-                .parse::<f32>()
-                .unwrap();
             println!(
                 "Exchange {} dollar to 원 becomes {:?} 원 ",
                 money,
-                (sell_ex_rate * money as f32) as u32,
+                (sell_ex_rate * money as f64) as u32,
             );
         }
+        Ok(Self {
+            cur_unit: cur_unit.to_string(),
+            buy_ex_rate: buy_ex_rate,
+            sell_ex_rate: sell_ex_rate,
+            cur_name: cur_name,
+        })
     }
 }
 
