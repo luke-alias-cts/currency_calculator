@@ -14,42 +14,42 @@ pub struct ExchangeRate {
 }
 
 impl ExchangeRate {
-    pub async fn cur(cur_unit: &str) -> Result<Self, String> {
+    pub async fn cur(cur_unit: &str)  {
         let an: Result<String, ReqwestError> = get_request().await;
         let str_an: &str = &an.unwrap();
         let a = get_map_from_json(str_an, "cur_unit", cur_unit);
         let value = &a.unwrap().unwrap();
-        println!("{:?}", value);
-        Ok(Self {
+        let res = Self {
             cur_unit: cur_unit.to_string(),
-            buy_ex_rate: value["ttb"]
+            buy_ex_rate: value["tts"]
                 .to_string()
                 .replace("\"", "")
                 .replace(",", "")
                 .parse::<f64>()
                 .unwrap(),
-            sell_ex_rate: value["tts"]
+            sell_ex_rate: value["ttb"]
                 .to_string()
                 .replace("\"", "")
                 .replace(",", "")
                 .parse::<f64>()
                 .unwrap(),
             cur_name: value["cur_nm"].to_string().replace("\"", ""),
-        })
+        };
+        println!("통화코드: {}, 송금 보낼 때 환율: {}, 송금 받을 때 환율: {}, 통화 이름: {}", res.cur_unit, res.buy_ex_rate, res.sell_ex_rate, res.cur_name);
     }
-    pub async fn cal(cur_unit: &str, money: u32, case: &str) -> Result<Self, String> {
+    pub async fn cal(cur_unit: &str, money: u32, case: &str) {
         let an: Result<String, ReqwestError> = get_request().await;
         let str_an: &str = &an.unwrap();
         let a = get_map_from_json(str_an, "cur_unit", cur_unit);
         let value = &a.unwrap().unwrap();
         let cur_name = value["cur_nm"].to_string().replace("\"", "");
-        let buy_ex_rate: f64 = value["ttb"]
+        let buy_ex_rate: f64 = value["tts"]
             .to_string()
             .replace("\"", "")
             .replace(",", "")
             .parse::<f64>()
             .unwrap();
-        let sell_ex_rate: f64 = value["tts"]
+        let sell_ex_rate: f64 = value["ttb"]
             .to_string()
             .replace("\"", "")
             .replace(",", "")
@@ -65,17 +65,21 @@ impl ExchangeRate {
             );
         } else {
             println!(
-                "Exchange {} dollar to 원 becomes {:?} 원 ",
+                "Exchange {} {} to 원 becomes {:?} 원 ",
                 money,
+                cur_name,
                 (sell_ex_rate * money as f64) as u32,
             );
         }
-        Ok(Self {
-            cur_unit: cur_unit.to_string(),
-            buy_ex_rate: buy_ex_rate,
-            sell_ex_rate: sell_ex_rate,
-            cur_name: cur_name,
-        })
+       
+    }
+    pub async fn currency_code() {
+        let an: Result<String, ReqwestError> = get_request().await;
+        let str_an: &str = &an.unwrap();
+        let v: Value = serde_json::from_str(str_an).unwrap();
+        v.as_array().unwrap().iter().for_each(|x| {
+            println!("Code: {}, Name: {} ", x["cur_unit"], x["cur_nm"]);
+        });
     }
 }
 
@@ -113,4 +117,28 @@ async fn get_request() -> Result<String, ReqwestError> {
 
     let body = response.text().await?;
     Ok(body)
+}
+
+const HELP: &str = 
+    "
+    Usage: cargo run [COMMAND] [ARGUMENTS]
+    Exchange_rate calculator is simple to search exchange rate information and calculate exchange by rust.
+    Example: cargo run cur USD 
+    Available commands:
+        - cal    
+            Calculate exchange rate buy or sell 
+            args = [cur_unit] [money] [case]
+            Example Buy case: cargo run cal USD 1000 buy
+            Example Sell case: cargo run cal USD 1000 sell
+        cur     
+            Get current exchange rate
+            args = [cur_unit]
+            Example: cargo run cur USD
+        help    
+            Display help information
+    ";
+
+pub fn help() {
+    println!("{}", HELP);
+    
 }

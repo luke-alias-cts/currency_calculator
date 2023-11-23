@@ -1,4 +1,4 @@
-use exchange_calculator::ExchangeRate;
+use exchange_calculator::{help, ExchangeRate};
 use std::env;
 
 #[tokio::main]
@@ -7,11 +7,11 @@ async fn main() {
 
     if args.len() > 1 {
         let command = &args[1];
-        println!("command: {}", command);
         let _ = match &command[..] {
             "cal" => ExchangeRate::cal(&args[2], args[3].parse::<u32>().unwrap(), &args[4]).await,
             "cur" => ExchangeRate::cur(&args[2]).await,
-            &_ => todo!(),
+            "code" => ExchangeRate::currency_code().await,
+            "help" | "--help" | "-h" | _ => help(),
         };
     } else {
         let _ = ExchangeRate::cur("USD").await;
