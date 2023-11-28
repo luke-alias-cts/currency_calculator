@@ -14,7 +14,7 @@ pub struct ExchangeRate {
 }
 
 impl ExchangeRate {
-    pub async fn cur(cur_unit: &str)  {
+    pub async fn cur(cur_unit: &str) {
         let an: Result<String, ReqwestError> = get_request().await;
         let str_an: &str = &an.unwrap();
         let a = get_map_from_json(str_an, "cur_unit", cur_unit);
@@ -35,7 +35,10 @@ impl ExchangeRate {
                 .unwrap(),
             cur_name: value["cur_nm"].to_string().replace("\"", ""),
         };
-        println!("통화코드: {}, 송금 보낼 때 환율: {}, 송금 받을 때 환율: {}, 통화 이름: {}", res.cur_unit, res.buy_ex_rate, res.sell_ex_rate, res.cur_name);
+        println!(
+            "통화코드: {}, 송금 보낼 때 환율: {}, 송금 받을 때 환율: {}, 통화 이름: {}",
+            res.cur_unit, res.buy_ex_rate, res.sell_ex_rate, res.cur_name
+        );
     }
     pub async fn cal(cur_unit: &str, money: u32, case: &str) {
         let an: Result<String, ReqwestError> = get_request().await;
@@ -71,7 +74,6 @@ impl ExchangeRate {
                 (sell_ex_rate * money as f64) as u32,
             );
         }
-       
     }
     pub async fn currency_code() {
         let an: Result<String, ReqwestError> = get_request().await;
@@ -119,8 +121,7 @@ async fn get_request() -> Result<String, ReqwestError> {
     Ok(body)
 }
 
-const HELP: &str = 
-    "
+const HELP: &str = r"
     Usage: cargo run [COMMAND] [ARGUMENTS]
     Exchange_rate calculator is simple to search exchange rate information and calculate exchange by rust.
     Example: cargo run cur USD 
@@ -140,5 +141,56 @@ const HELP: &str =
 
 pub fn help() {
     println!("{}", HELP);
-    
+}
+
+#[cfg(test)]
+mod test {
+    use dotenv::dotenv;
+    use httpmock::prelude::*;
+    use std::fs;
+
+    use crate::{get_map_from_json, get_request};
+
+    #[tokio::test]
+    async fn test_real_api_request() {
+        let result = get_request().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_data() {
+        dotenv().ok();
+        let server = MockServer::start();
+        let env_api_key: String = std::env::var("AUTHKEY").unwrap();
+        let api_key: &str = &env_api_key;
+        let mock_body = fs::read_to_string("fixtures.json").unwrap();
+
+        let mock = server.mock(|when, then| {
+            when.method(GET)
+                .path("/site/program/financial/exchangeJSON")
+                .query_param("authkey", api_key)
+                .query_param("data", "AP01");
+            then.status(200).body(&mock_body);
+        });
+
+        let url = format!(
+            "{}/site/program/financial/exchangeJSON?authkey={}&data=AP01",
+            server.base_url(),
+            api_key
+        );
+
+        let response = reqwest::Client::new()
+            .get(&url)
+            .send()
+            .await
+            .expect("Failed to send request");
+        println!("test response");
+        mock.assert();
+        println!("test mocking");
+        assert_eq!(response.status(), 200);
+        let body = response.text().await.unwrap();
+        let a = get_map_from_json(&body, "cur_unit", "USD");
+        let value = &a.unwrap().unwrap();
+        println!("{:?}", value);
+    }
 }
