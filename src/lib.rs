@@ -3,7 +3,7 @@ use dotenv::dotenv;
 use reqwest::Error as ReqwestError;
 use serde_json::{Error, Value};
 use std::collections::HashMap;
-use std::env;
+use std::{env, fmt};
 
 #[derive(Debug)]
 pub struct ExchangeRate {
@@ -13,11 +13,31 @@ pub struct ExchangeRate {
     pub cur_name: String,
 }
 
+#[derive(Debug)]
+struct NotFoundError {
+    key: String,
+    value: String,
+}
+
+impl fmt::Display for NotFoundError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "No object found with key '{}' and value '{}'",
+            self.key, self.value
+        )
+    }
+}
+
+impl std::error::Error for NotFoundError {}
+
 impl ExchangeRate {
-    pub async fn cur(cur_unit: &str) {
+    pub async fn currency_exchange(cur_unit: &str) {
         let an: Result<String, ReqwestError> = get_request().await;
         let str_an: &str = &an.unwrap();
-        let a = get_map_from_json(str_an, "cur_unit", cur_unit);
+        // println!("cur func str_an ::::{:?}", str_an); // array of json
+        let a = get_map_from_json(str_an, "cur_unit", cur_unit); // array of json
+        println!("cur func a ::::{:?}", a);
         let value = &a.unwrap().unwrap();
         let res = Self {
             cur_unit: cur_unit.to_string(),
@@ -40,7 +60,7 @@ impl ExchangeRate {
             res.cur_unit, res.buy_ex_rate, res.sell_ex_rate, res.cur_name
         );
     }
-    pub async fn cal(cur_unit: &str, money: u32, case: &str) {
+    pub async fn calculate(cur_unit: &str, money: u32, case: &str) {
         let an: Result<String, ReqwestError> = get_request().await;
         let str_an: &str = &an.unwrap();
         let a = get_map_from_json(str_an, "cur_unit", cur_unit);
@@ -86,7 +106,7 @@ impl ExchangeRate {
 }
 
 fn get_map_from_json(json_str: &str, key: &str, value: &str) -> Result<Option<Value>, Error> {
-    let v: Value = serde_json::from_str(json_str)?;
+    let v: Value = serde_json::from_str(json_str).unwrap();
     if let Value::Array(array) = v {
         for item in array {
             if let Value::Object(obj) = item {
@@ -96,15 +116,14 @@ fn get_map_from_json(json_str: &str, key: &str, value: &str) -> Result<Option<Va
             }
         }
     }
-
-    Ok(None)
+    panic!("No object found with key '{}' and value '{}'", key, value);
 }
 
 async fn get_request() -> Result<String, ReqwestError> {
     dotenv().ok();
     let env_api_key: String = env::var("AUTHKEY").unwrap();
     let api_key: &str = &env_api_key;
-
+    println!("get_request ;;;;; test path");
     let url = "https://www.koreaexim.go.kr/site/program/financial/exchangeJSON";
     // Set up the query parameters for the request
     let mut params = HashMap::new();
@@ -147,6 +166,7 @@ pub fn help() {
 mod test {
     use dotenv::dotenv;
     use httpmock::prelude::*;
+    use serde_json::Value;
     use std::fs;
 
     use crate::{get_map_from_json, get_request};
@@ -156,16 +176,25 @@ mod test {
         let result = get_request().await;
         assert!(result.is_ok());
     }
-
+    #[test]
+    fn test_get_map_from_json() {
+        let mock_body: String = fs::read_to_string("fixtures.json").unwrap();
+        let json_body: Value = serde_json::from_str(&mock_body).unwrap();
+        let target = json_body.as_array().unwrap();
+        let result = get_map_from_json(&mock_body, "cur_unit", "USD");
+        let res = result.unwrap().unwrap();
+        assert_eq!(res, target[0]);
+    }
     #[tokio::test]
-    async fn test_fetch_data() {
+    async fn test_currency_exchange() {
+        use crate::ExchangeRate;
         dotenv().ok();
         let server = MockServer::start();
         let env_api_key: String = std::env::var("AUTHKEY").unwrap();
         let api_key: &str = &env_api_key;
         let mock_body = fs::read_to_string("fixtures.json").unwrap();
 
-        let mock = server.mock(|when, then| {
+        let _mock = server.mock(|when, then| {
             when.method(GET)
                 .path("/site/program/financial/exchangeJSON")
                 .query_param("authkey", api_key)
@@ -173,24 +202,6 @@ mod test {
             then.status(200).body(&mock_body);
         });
 
-        let url = format!(
-            "{}/site/program/financial/exchangeJSON?authkey={}&data=AP01",
-            server.base_url(),
-            api_key
-        );
-
-        let response = reqwest::Client::new()
-            .get(&url)
-            .send()
-            .await
-            .expect("Failed to send request");
-        println!("test response");
-        mock.assert();
-        println!("test mocking");
-        assert_eq!(response.status(), 200);
-        let body = response.text().await.unwrap();
-        let a = get_map_from_json(&body, "cur_unit", "USD");
-        let value = &a.unwrap().unwrap();
-        println!("{:?}", value);
+        ExchangeRate::currency_exchange("USD").await;
     }
 }
